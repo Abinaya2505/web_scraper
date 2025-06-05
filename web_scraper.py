@@ -9,12 +9,16 @@ def scrape_oracle():
         with sync_playwright() as p:
             browser = p.chromium.launch()
             page = browser.new_page()
+
             page.goto("https://docs.oracle.com/en/cloud/saas/readiness/erp/25b/ah25b/25B-accounting-hub-wn-t65682.html", timeout=60000)
 
-            # ✅ Wait for content to load
-            page.wait_for_selector("div.wn-feature", timeout=15000)
-            content = page.text_content("div.wn-feature")
+            # ✅ Wait until DOM is fully loaded
+            page.wait_for_load_state('networkidle', timeout=30000)
+
+            # ✅ Now extract the full body or specific section
+            content = page.text_content("body")  # or use a better selector if needed
             browser.close()
+
             return jsonify({"content": content})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
