@@ -3,11 +3,6 @@ from playwright.sync_api import sync_playwright
 
 app = Flask(__name__)
 
-from flask import Flask, jsonify
-from playwright.sync_api import sync_playwright
-
-app = Flask(__name__)
-
 @app.route('/scrape_oracle', methods=['GET'])
 def scrape_oracle():
     with sync_playwright() as p:
@@ -26,4 +21,3 @@ def scrape_oracle():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-
