@@ -11,14 +11,10 @@ def scrape_oracle():
         return jsonify({"error": "Missing URL parameter"}), 400
 
     try:
-        # Safely fetch the webpage
-        headers = {
-            'User-Agent': 'Mozilla/5.0'
-        }
+        headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
 
-        # Parse HTML and clean it
         soup = BeautifulSoup(response.text, "html.parser")
         for tag in soup(["script", "style", "nav", "footer", "header"]):
             tag.decompose()
@@ -26,14 +22,18 @@ def scrape_oracle():
         raw_text = soup.get_text(separator='\n')
         cleaned_text = '\n'.join(line.strip() for line in raw_text.splitlines() if line.strip())
 
-        # Return only if there's actual readable content
         if len(cleaned_text) < 500:
             return jsonify({"error": "Extracted content is too short or not meaningful."}), 422
 
-        return jsonify({"content": cleaned_text[:30000]})  # Trim if very large
+        return jsonify({"content": cleaned_text[:30000]})  # Trim large payload
 
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"HTTP request failed: {str(e)}"}), 502
     except Exception as e:
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
+# ✅ THIS BLOCK BELOW MUST BE LAST in the file:
+if __name__ == "__main__":
+    import os
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
