@@ -1,23 +1,27 @@
-from flask import Flask, jsonify
-from playwright.sync_api import sync_playwright
+from flask import Flask, request, jsonify
+import requests
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
-@app.route('/scrape_oracle', methods=['GET'])
-def scrape_oracle():
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto("https://docs.oracle.com/en/cloud/saas/readiness/erp/25b/ah25b/25B-accounting-hub-wn-t65682.html", timeout=90000)
+@app.route("/scrape_oracle")
+def scrape():
+    url = request.args.get("url")
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
 
-        # ✅ Wait for key content to load
-        page.wait_for_selector("div.section")
+    try:
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
 
-        # Extract readable feature content
-        content = page.inner_text("body")
+        # Strip scripts, styles, and clean
+        for tag in soup(["script", "style", "nav", "footer", "header"]):
+            tag.decompose()
 
-        browser.close()
-    return jsonify({'content': content})
+        visible_text = soup.get_text(separator='\n')
+        clean_text = '\n'.join(line.strip() for line in visible_text.splitlines() if line.strip())
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+        return jsonify({"content": clean_text})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
