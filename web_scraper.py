@@ -33,7 +33,8 @@ def scrape_oracle():
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
 # ✅ THIS BLOCK BELOW MUST BE LAST in the file:
+import os
+
 if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5000))  # Render injects this env var
     app.run(host="0.0.0.0", port=port)
