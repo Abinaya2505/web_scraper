@@ -1,16 +1,15 @@
 from flask import Flask, request, jsonify
 from playwright.sync_api import sync_playwright
-from bs4 import BeautifulSoup
 import subprocess
 import os
 
 app = Flask(__name__)
 
-# Ensure Playwright browser binaries are installed
+# Install browser binaries
 try:
     subprocess.run(["playwright", "install", "chromium"], check=True)
 except Exception as e:
-    print(f"Browser install failed: {str(e)}")
+    print(f"Playwright install failed: {str(e)}")
 
 @app.route("/scrape_oracle", methods=["GET"])
 def scrape_oracle():
@@ -23,10 +22,9 @@ def scrape_oracle():
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            # Go to the URL and wait for all network activity to finish
             page.goto(url, timeout=60000, wait_until="networkidle")
 
-            # Scroll to bottom to load dynamic content
+            # Scroll to load dynamic content
             page.evaluate(
                 """() => {
                     return new Promise(resolve => {
@@ -45,26 +43,29 @@ def scrape_oracle():
             )
 
             page.wait_for_selector("body", timeout=10000)
-visible_text = page.inner_text("body")
+
+            # ✅ Get only visible rendered text
+            try:
+                visible_text = page.inner_text("body")
+            except Exception as e:
+                return jsonify({"error": f"Failed to extract visible text: {str(e)}"}), 500
+
             browser.close()
 
-        # Clean HTML with BeautifulSoup
-soup = BeautifulSoup(visible_text, "html.parser")
-        for tag in soup(["script", "style", "nav", "footer", "header"]):
-            tag.decompose()
-
-        raw_text = soup.get_text(separator='\n')
-        cleaned_text = '\n'.join(line.strip() for line in raw_text.splitlines() if line.strip())
+        # Basic cleanup (if needed)
+        cleaned_text = '\n'.join(
+            line.strip() for line in visible_text.splitlines() if line.strip()
+        )
 
         if len(cleaned_text) < 500:
             return jsonify({"error": "Extracted content is too short or not meaningful."}), 422
 
-        return jsonify({"content": cleaned_text[:60000]})  # Increased from 30000
+        return jsonify({"content": cleaned_text[:60000]})
 
     except Exception as e:
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
-# Required entry point for Render
+# Required entry for Render
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
