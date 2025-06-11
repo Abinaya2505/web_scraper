@@ -1,4 +1,4 @@
-\from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify
 from playwright.sync_api import sync_playwright
 import subprocess
 import os
