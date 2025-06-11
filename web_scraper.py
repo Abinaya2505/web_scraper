@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
-import requests
-from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
+import os
 
 app = Flask(__name__)
 
@@ -11,30 +11,21 @@ def scrape_oracle():
         return jsonify({"error": "Missing URL parameter"}), 400
 
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, timeout=60000)
+            content = page.text_content("body")
+            browser.close()
 
-        soup = BeautifulSoup(response.text, "html.parser")
-        for tag in soup(["script", "style", "nav", "footer", "header"]):
-            tag.decompose()
-
-        raw_text = soup.get_text(separator='\n')
-        cleaned_text = '\n'.join(line.strip() for line in raw_text.splitlines() if line.strip())
-
-        if len(cleaned_text) < 500:
+        if not content or len(content.strip()) < 1000:
             return jsonify({"error": "Extracted content is too short or not meaningful."}), 422
 
-        return jsonify({"content": cleaned_text[:30000]})  # Trim large payload
+        return jsonify({"content": content[:30000]})
 
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"HTTP request failed: {str(e)}"}), 502
     except Exception as e:
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
-# ✅ THIS BLOCK BELOW MUST BE LAST in the file:
-import os
-
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  # Render injects this env var
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
