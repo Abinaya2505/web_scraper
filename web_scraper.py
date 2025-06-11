@@ -1,9 +1,16 @@
 from flask import Flask, request, jsonify
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
+import subprocess
 import os
 
 app = Flask(__name__)
+
+# Ensure Playwright browser binaries are installed at runtime
+try:
+    subprocess.run(["playwright", "install", "chromium"], check=True)
+except Exception as e:
+    print(f"Browser install failed: {str(e)}")
 
 @app.route("/scrape_oracle", methods=["GET"])
 def scrape_oracle():
@@ -15,18 +22,16 @@ def scrape_oracle():
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            page.goto(url, timeout=60000)
 
-            # Wait for visible content (you can tune the selector)
+            # Use wait_until to make sure JS-heavy pages are fully loaded
+            page.goto(url, timeout=60000, wait_until="networkidle")
             page.wait_for_selector("body", timeout=10000)
 
-            html = page.content()  # full rendered HTML
+            html = page.content()
             browser.close()
 
-        # Clean up using BeautifulSoup
+        # Use BeautifulSoup to clean HTML
         soup = BeautifulSoup(html, "html.parser")
-
-        # Remove unwanted tags
         for tag in soup(["script", "style", "nav", "footer", "header"]):
             tag.decompose()
 
@@ -41,7 +46,7 @@ def scrape_oracle():
     except Exception as e:
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
-# 🔁 REQUIRED for Render
+# 🔁 Required entrypoint for Render
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
