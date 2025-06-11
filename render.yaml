@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: web-scraper-lkoo
+    env: python
+    buildCommand: pip install -r requirements.txt && playwright install
+    startCommand: python web_scraper.py
+    plan: free
