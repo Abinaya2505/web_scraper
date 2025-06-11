@@ -6,7 +6,7 @@ import os
 
 app = Flask(__name__)
 
-# Ensure Playwright browser binaries are installed at runtime
+# Ensure Playwright browser binaries are installed
 try:
     subprocess.run(["playwright", "install", "chromium"], check=True)
 except Exception as e:
@@ -23,14 +23,32 @@ def scrape_oracle():
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            # Use wait_until to make sure JS-heavy pages are fully loaded
+            # Go to the URL and wait for all network activity to finish
             page.goto(url, timeout=60000, wait_until="networkidle")
-            page.wait_for_selector("body", timeout=10000)
 
+            # Scroll to bottom to load dynamic content
+            page.evaluate(
+                """() => {
+                    return new Promise(resolve => {
+                        let totalHeight = 0;
+                        const distance = 500;
+                        const timer = setInterval(() => {
+                            window.scrollBy(0, distance);
+                            totalHeight += distance;
+                            if (totalHeight >= document.body.scrollHeight) {
+                                clearInterval(timer);
+                                resolve();
+                            }
+                        }, 200);
+                    });
+                }"""
+            )
+
+            page.wait_for_selector("body", timeout=10000)
             html = page.content()
             browser.close()
 
-        # Use BeautifulSoup to clean HTML
+        # Clean HTML with BeautifulSoup
         soup = BeautifulSoup(html, "html.parser")
         for tag in soup(["script", "style", "nav", "footer", "header"]):
             tag.decompose()
@@ -41,12 +59,12 @@ def scrape_oracle():
         if len(cleaned_text) < 500:
             return jsonify({"error": "Extracted content is too short or not meaningful."}), 422
 
-        return jsonify({"content": cleaned_text[:30000]})
+        return jsonify({"content": cleaned_text[:60000]})  # Increased from 30000
 
     except Exception as e:
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
-# 🔁 Required entrypoint for Render
+# Required entry point for Render
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
