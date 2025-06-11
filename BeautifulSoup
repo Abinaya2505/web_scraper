@@ -45,11 +45,11 @@ def scrape_oracle():
             )
 
             page.wait_for_selector("body", timeout=10000)
-            html = page.content()
+visible_text = page.inner_text("body")
             browser.close()
 
         # Clean HTML with BeautifulSoup
-        soup = BeautifulSoup(html, "html.parser")
+soup = BeautifulSoup(visible_text, "html.parser")
         for tag in soup(["script", "style", "nav", "footer", "header"]):
             tag.decompose()
 
