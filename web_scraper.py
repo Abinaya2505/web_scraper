@@ -1,66 +1,52 @@
 from flask import Flask, request, jsonify
-from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 import re
 
 app = Flask(__name__)
 
-@app.route("/scrape_oracle", methods=["GET"])
+@app.route('/scrape_oracle', methods=['GET'])
 def scrape_oracle():
-    url = request.args.get("url")
+    url = request.args.get('url')
     if not url:
-        return jsonify({"error": "Missing 'url' parameter"}), 400
+        return jsonify({"error": "URL is required"}), 400
 
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
             page.goto(url, timeout=60000)
-            page.wait_for_timeout(5000)  # Wait for full load
-
+            page.wait_for_timeout(3000)
             html = page.content()
             browser.close()
 
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(html, 'html.parser')
 
-        for tag in soup(["nav", "footer", "header", "script", "style", "aside", "noscript"]):
-            tag.decompose()
+        # ✅ Extract meaningful content from known Oracle structure
+        main_content = soup.find('div', class_='main-content') or soup.find('main') or soup.body
+        text = main_content.get_text(separator='\n', strip=True) if main_content else soup.get_text(separator='\n', strip=True)
 
-        content_tags = soup.select("main, article, section")
-
-        if not content_tags:
-            content_tags = soup.find_all("div")
-
-        full_text = "\n".join(tag.get_text(separator=" ", strip=True) for tag in content_tags)
-
-        # Strip out junk 404 or fallback content
+        # ✅ Remove known junk patterns
         fallback_patterns = [
             r"We can't find the page",
-            r"This page may have been moved",
-            r"Oracle.com Home Page",
-            r"Try search above",
             r"Subscribe to emails",
-            r"Site Map",
-            r"Country/Region"
+            r"Oracle.com Home Page",
+            r"Try Oracle Cloud Free Tier",
+            r"\b(View|Sign In|Careers|Sitemap|Ad Choices|Country/Region|Privacy)\b",
+            r"\b202[0-5] Oracle\b",
         ]
         for pattern in fallback_patterns:
-            if re.search(pattern, full_text, re.IGNORECASE):
-                return jsonify({"summary": "The page appears to be a 404 or generic Oracle site page. Please verify the URL."})
+            if re.search(pattern, text, re.IGNORECASE):
+                return jsonify({"content": "", "summary": "ERROR: Fallback or junk content detected"}), 200
 
-        summary = full_text.strip()
-        if len(summary) > 30000:
-            summary = summary[:30000] + "\n\n[Truncated due to length]"
+        # ✅ Short-circuit if text is too generic or short
+        if len(text.strip()) < 500:
+            return jsonify({"content": "", "summary": "ERROR: Not enough meaningful content extracted"}), 200
 
-        return jsonify({"summary": summary})
-
+        return jsonify({"content": text.strip()})
+    
     except Exception as e:
-        return jsonify({"summary": f"ERROR: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
-
-@app.route("/", methods=["GET"])
-def index():
-    return "Oracle Web Scraper is Live. Use /scrape_oracle?url=YOUR_URL to extract content.", 200
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=10000)
